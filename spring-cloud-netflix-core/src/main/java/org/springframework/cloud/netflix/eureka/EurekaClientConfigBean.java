@@ -24,17 +24,24 @@ import java.util.Map;
 
 import lombok.Data;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import com.netflix.appinfo.EurekaAccept;
 import com.netflix.discovery.EurekaClientConfig;
+import org.springframework.core.env.PropertyResolver;
 
 /**
  * @author Dave Syer
  */
 @Data
-@ConfigurationProperties("eureka.client")
+@ConfigurationProperties(EurekaClientConfigBean.PREFIX)
 public class EurekaClientConfigBean implements EurekaClientConfig {
+
+	public static final String PREFIX = "eureka.client";
+
+	@Autowired(required = false)
+	PropertyResolver propertyResolver;
 
 	public static final String DEFAULT_URL = "http://localhost:8761"
 			+ EurekaServerConfigBean.DEFAULT_PREFIX + "/";
@@ -207,4 +214,12 @@ public class EurekaClientConfigBean implements EurekaClientConfig {
 		return this.onDemandUpdateStatusChange;
 	}
 
+	@Override
+	public String getExperimental(String name) {
+		if (propertyResolver != null) {
+			return propertyResolver.getProperty(PREFIX + ".experimental." + name,
+					String.class, null);
+		}
+		return null;
+	}
 }

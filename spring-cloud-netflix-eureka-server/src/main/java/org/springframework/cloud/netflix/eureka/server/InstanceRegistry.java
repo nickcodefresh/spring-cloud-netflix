@@ -14,29 +14,69 @@
  * limitations under the License.
  */
 
-package org.springframework.cloud.netflix.eureka.server.event;
+package org.springframework.cloud.netflix.eureka.server;
 
 import java.util.List;
 
 import lombok.extern.apachecommons.CommonsLog;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cloud.netflix.eureka.server.advice.LeaseManagerLite;
+import org.springframework.beans.BeansException;
+import org.springframework.cloud.netflix.eureka.server.event.EurekaInstanceCanceledEvent;
+import org.springframework.cloud.netflix.eureka.server.event.EurekaInstanceRegisteredEvent;
+import org.springframework.cloud.netflix.eureka.server.event.EurekaInstanceRenewedEvent;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 
+import com.netflix.appinfo.ApplicationInfoManager;
 import com.netflix.appinfo.InstanceInfo;
+import com.netflix.discovery.EurekaClient;
+import com.netflix.discovery.EurekaClientConfig;
 import com.netflix.discovery.shared.Application;
-import com.netflix.eureka.PeerAwareInstanceRegistryImpl;
+import com.netflix.eureka.EurekaServerConfig;
 import com.netflix.eureka.lease.Lease;
+import com.netflix.eureka.registry.PeerAwareInstanceRegistryImpl;
+import com.netflix.eureka.resources.ServerCodecs;
 
 /**
  * @author Spencer Gibb
  */
 @CommonsLog
-public class LeaseManagerMessageBroker implements LeaseManagerLite<InstanceInfo> {
+public class InstanceRegistry extends PeerAwareInstanceRegistryImpl implements ApplicationContextAware {
 
-	@Autowired
 	private ApplicationContext ctxt;
+
+	public InstanceRegistry(EurekaServerConfig serverConfig,
+			EurekaClientConfig clientConfig, ServerCodecs serverCodecs,
+			EurekaClient eurekaClient) {
+		super(serverConfig, clientConfig, serverCodecs, eurekaClient);
+
+		/*
+		 * Setting expectedNumberOfRenewsPerMin to non-zero to ensure that even an
+		 * isolated server can adjust its eviction policy to the number of registrations
+		 * (when it's zero, even a successful registration won't reset the rate threshold
+		 * in InstanceRegistry.register()).
+		 */
+		expectedNumberOfRenewsPerMin = 1;
+	}
+
+	@Override
+	public void setApplicationContext(ApplicationContext context) throws BeansException {
+		this.ctxt = context;
+	}
+
+	/**
+	 * If {@link PeerAwareInstanceRegistryImpl#openForTraffic(ApplicationInfoManager, int)}
+	 * is called with a zero * argument, it means that leases are not
+	 * automatically * cancelled if the instance * hasn't sent any renewals
+	 * recently. This happens for a standalone server. It seems like a bad
+	 * default, so we set it to the smallest non-zero value we can, so that any
+	 * instances that subsequently register can bump up the threshold.
+	 */
+	@Override
+	public void openForTraffic(ApplicationInfoManager applicationInfoManager, int count) {
+		super.openForTraffic(applicationInfoManager, count == 0 ? 1 : count);
+	}
+
 
 	@Override
 	public void register(InstanceInfo info, boolean isReplication) {
@@ -50,6 +90,8 @@ public class LeaseManagerMessageBroker implements LeaseManagerLite<InstanceInfo>
 		// TODO: what to publish from info (whole object?)
 		this.ctxt.publishEvent(new EurekaInstanceRegisteredEvent(this, info,
 				leaseDuration, isReplication));
+
+		super.register(info, leaseDuration, isReplication);
 	}
 
 	@Override
@@ -58,16 +100,16 @@ public class LeaseManagerMessageBroker implements LeaseManagerLite<InstanceInfo>
 				+ isReplication);
 		this.ctxt.publishEvent(new EurekaInstanceCanceledEvent(this, appName, serverId,
 				isReplication));
-		return false;
+
+		return super.cancel(appName, serverId, isReplication);
 	}
 
 	@Override
 	public boolean renew(final String appName, final String serverId,
-			boolean isReplication) {
+						 boolean isReplication) {
 		log.debug("renew " + appName + " serverId " + serverId + ", isReplication {}"
 				+ isReplication);
-		List<Application> applications = PeerAwareInstanceRegistryImpl.getInstance()
-				.getSortedApplications();
+		List<Application> applications = getSortedApplications();
 		for (Application input : applications) {
 			if (input.getName().equals(appName)) {
 				InstanceInfo instance = null;
@@ -82,11 +124,6 @@ public class LeaseManagerMessageBroker implements LeaseManagerLite<InstanceInfo>
 				break;
 			}
 		}
-		return false;
+		return super.renew(appName, serverId, isReplication);
 	}
-
-	@Override
-	public void evict() {
-	}
-
 }

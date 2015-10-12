@@ -47,6 +47,15 @@ import org.springframework.util.ClassUtils;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
 
 import com.netflix.appinfo.ApplicationInfoManager;
+import com.netflix.discovery.EurekaClient;
+import com.netflix.discovery.EurekaClientConfig;
+import com.netflix.eureka.DefaultEurekaServerContext;
+import com.netflix.eureka.EurekaServerConfig;
+import com.netflix.eureka.EurekaServerContext;
+import com.netflix.eureka.cluster.PeerEurekaNodes;
+import com.netflix.eureka.registry.PeerAwareInstanceRegistry;
+import com.netflix.eureka.resources.DefaultServerCodecs;
+import com.netflix.eureka.resources.ServerCodecs;
 import com.sun.jersey.api.core.DefaultResourceConfig;
 import com.sun.jersey.spi.container.servlet.ServletContainer;
 
@@ -68,6 +77,15 @@ public class EurekaServerConfiguration extends WebMvcConfigurerAdapter {
 	@Autowired
 	private ApplicationInfoManager applicationInfoManager;
 
+	@Autowired
+	private EurekaServerConfig eurekaServerConfig;
+
+	@Autowired
+	private EurekaClientConfig eurekaClientConfig;
+
+	@Autowired
+	private EurekaClient eurekaClient;
+
 	@Bean
 	public HasFeatures eurekaServerFeature() {
 		return HasFeatures.namedFeature("Eureka Server", EurekaServerConfiguration.class);
@@ -77,6 +95,40 @@ public class EurekaServerConfiguration extends WebMvcConfigurerAdapter {
 	@ConditionalOnProperty(prefix = "eureka.dashboard", name = "enabled", matchIfMissing = true)
 	public EurekaController eurekaController() {
 		return new EurekaController(applicationInfoManager);
+	}
+
+	@Bean
+	public ServerCodecs serverCodecs() {
+		return new DefaultServerCodecs(eurekaServerConfig);
+	}
+
+	@Bean
+	public PeerAwareInstanceRegistry peerAwareInstanceRegistry(ServerCodecs serverCodecs) {
+		eurekaClient.getApplications(); // force initialization
+		return new InstanceRegistry(eurekaServerConfig, eurekaClientConfig,
+				serverCodecs, eurekaClient);
+	}
+
+	@Bean
+	public PeerEurekaNodes peerEurekaNodes(PeerAwareInstanceRegistry registry,
+										   ServerCodecs serverCodecs) {
+		return new PeerEurekaNodes(registry, eurekaServerConfig, eurekaClientConfig,
+				serverCodecs, applicationInfoManager);
+	}
+
+	@Bean
+	public EurekaServerContext eurekaServerContext(ServerCodecs serverCodecs,
+												   PeerAwareInstanceRegistry registry,
+												   PeerEurekaNodes peerEurekaNodes) {
+		return new DefaultEurekaServerContext(eurekaServerConfig, serverCodecs, registry,
+				peerEurekaNodes, applicationInfoManager);
+	}
+
+	@Bean
+	public EurekaServerBootstrap eurekaServerBootstrap(PeerAwareInstanceRegistry registry,
+													   EurekaServerContext serverContext) {
+		return new EurekaServerBootstrap(applicationInfoManager, eurekaClientConfig,
+				eurekaServerConfig, registry, serverContext);
 	}
 
 	/**
