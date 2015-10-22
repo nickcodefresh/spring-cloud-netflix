@@ -65,8 +65,7 @@ public class DiscoveryClientConfiguration {
 		@ConditionalOnMissingBean(value = EurekaClient.class, search = SearchStrategy.CURRENT)
 		@SneakyThrows
 		public EurekaClient eurekaClient(ApplicationInfoManager applicationInfoManager,
-										 EurekaClientConfig config, EurekaInstanceConfig instance) {
-			applicationInfoManager.initComponent(instance);
+										 EurekaClientConfig config) {
 			return new CloudEurekaClient(applicationInfoManager, config, this.context);
 		}
 	}
@@ -83,8 +82,7 @@ public class DiscoveryClientConfiguration {
 		@SneakyThrows
 		@org.springframework.cloud.context.config.annotation.RefreshScope
 		public EurekaClient eurekaClient(ApplicationInfoManager applicationInfoManager,
-										 EurekaClientConfig config, EurekaInstanceConfig instance) {
-			applicationInfoManager.initComponent(instance);
+										 EurekaClientConfig config) {
 			return new CloudEurekaClient(applicationInfoManager, config, this.context);
 		}
 
