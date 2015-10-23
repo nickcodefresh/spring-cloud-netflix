@@ -18,15 +18,21 @@ package org.springframework.cloud.netflix.feign.support;
 
 import feign.Contract;
 import feign.MethodMetadata;
+
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.bind.annotation.MatrixVariable;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ValueConstants;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static feign.Util.checkState;
@@ -160,6 +166,35 @@ public class SpringMvcContract extends Contract.BaseContract {
 				data.template().header(name, header);
 				nameParam(data, name, paramIndex);
 				isHttpAnnotation = true;
+			}else if (parameterAnnotation instanceof MatrixVariable) {
+			    
+			    String name = MatrixVariable.class.cast(parameterAnnotation).pathVar();
+                Collection<String> query = addTemplatedParam(data.template().queries()
+                        .get(name), name);
+                data.template().query(name, query);
+			    nameParam(data, name, paramIndex);
+	            
+			    String varName = '{' + name + '}';
+                if (data.template().url().indexOf(varName) == -1
+                        && !searchMapValues(data.template().queries(), varName)
+                        && !searchMapValues(data.template().headers(), varName)) {
+                    data.formParams().add(name);
+                }
+			    
+			    String pathVar = MatrixVariable.class.cast(parameterAnnotation).pathVar();
+	            
+	            
+	            
+	            List<String> paramValues = null;
+
+	            Map<String, MultiValueMap<String, String>> pathParameters = new HashMap<>();
+	            if (!pathVar.equals(ValueConstants.DEFAULT_NONE)) {
+	                if (pathParameters.containsKey(pathVar)) {
+	                    paramValues = pathParameters.get(pathVar).get(name);
+	                }
+	            }
+
+			    
 			}
 
 			// TODO

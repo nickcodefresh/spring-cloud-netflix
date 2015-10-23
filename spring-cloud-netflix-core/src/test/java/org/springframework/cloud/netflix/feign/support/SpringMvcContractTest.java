@@ -3,6 +3,8 @@ package org.springframework.cloud.netflix.feign.support;
 import static org.junit.Assert.assertEquals;
 
 import java.lang.reflect.Method;
+import java.util.List;
+import java.util.Map;
 
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
@@ -13,6 +15,7 @@ import org.junit.Test;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.MatrixVariable;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -111,6 +114,17 @@ public class SpringMvcContractTest {
         assertEquals("GET", data.template().method());
         assertEquals(MediaType.APPLICATION_JSON_VALUE, data.template().headers().get("Accept").iterator().next());
     }
+    
+    @Test
+    public void testProcessAnnotations_MatrixVariable() throws Exception {
+        
+        Method method = TestTemplate_MatrixVariable.class.getDeclaredMethod("getTest", Map.class);
+        MethodMetadata data = contract.parseAndValidateMetadata(method.getDeclaringClass(), method);
+
+        assertEquals("", data.template().url());
+        assertEquals("GET", data.template().method());
+        assertEquals(MediaType.APPLICATION_JSON_VALUE, data.template().headers().get("Accept").iterator().next());
+    }
 
     public interface TestTemplate_Simple {
         @RequestMapping(value = "/test/{id}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -130,6 +144,14 @@ public class SpringMvcContractTest {
 
         @RequestMapping(method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
         TestObject getTest();
+    }
+    
+    @JsonAutoDetect
+    public interface TestTemplate_MatrixVariable {
+
+        @RequestMapping(method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+        TestObject getTest(@MatrixVariable(pathVar = "matrixVar") Map<String, List<String>> matrixVar);
+            
     }
 
     @AllArgsConstructor
